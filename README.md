@@ -52,4 +52,3 @@ Do not push your work to a public repo (for example a fork of this one): everyon
 ## Plagiarism check
 
 - Do not show your code to anyone.
-- The lab quiz may ask about your implementation, so do it yourself.
