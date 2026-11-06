@@ -97,6 +97,9 @@ struct proc {
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S
+  pagetable_t shadow;          // checkpoint: copies of the region, or 0
+  uint64 ckpt_va;              // checkpoint: first page of the region
+  int ckpt_n;                  // checkpoint: pages in the region
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory

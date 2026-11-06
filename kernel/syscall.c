@@ -103,6 +103,11 @@ extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_sync(void);
+extern uint64 sys_vatopa(void);
+extern uint64 sys_pgdirty(void);
+extern uint64 sys_pgprotect(void);
+extern uint64 sys_checkpoint(void);
+extern uint64 sys_rollback(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -130,6 +135,11 @@ static uint64 (*syscalls[])(void) = {
   [SYS_mkdir]   = sys_mkdir,
   [SYS_close]   = sys_close,
   [SYS_sync]    = sys_sync,
+  [SYS_vatopa]     = sys_vatopa,
+  [SYS_pgdirty]    = sys_pgdirty,
+  [SYS_pgprotect]  = sys_pgprotect,
+  [SYS_checkpoint] = sys_checkpoint,
+  [SYS_rollback]   = sys_rollback,
   // clang-format on
 };
 

@@ -2,6 +2,7 @@
 # Run the xv6 lab tools inside the course container.
 #
 #   ./lab shell          interactive shell in the container (default)
+#   ./lab grade [test]   ./grade, the public self-check
 #   ./lab make qemu      any command; exit qemu with Ctrl-a x
 #   ./lab build          (re)build the image
 #
@@ -30,5 +31,6 @@ run=(docker run --rm "${tty[@]}" --init
 
 case "${1-shell}" in
   shell) "${run[@]}" "$IMAGE" bash ;;
+  grade) shift; "${run[@]}" "$IMAGE" ./grade "$@" ;;
   *)     "${run[@]}" "$IMAGE" "$@" ;;
 esac

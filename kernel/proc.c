@@ -161,6 +161,7 @@ freeproc(struct proc *p)
   if (p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  ckpt_free(p);
   p->sz = 0;
   p->pid = 0;
   p->name[0] = 0;

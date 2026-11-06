@@ -489,3 +489,89 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
+// --- Virtual memory lab -------------------------------------------------
+//
+// Fill in every place marked TODO:
+//   TODO (q0): vatopa()
+//   TODO (q1): pgdirty()
+//   TODO (q2): pgprotect()
+//   TODO (q3): ckpt_free(), ckpt_take(), ckpt_rollback()
+// vmrange_ok() is provided. walk(), mappages(), uvmcreate(), uvmunmap(),
+// freewalk(), kalloc(), kfree(), memmove() and sfence_vma() are useful.
+
+// A page range for pgdirty, pgprotect and checkpoint: page-aligned, 1..64
+// pages, inside the user address space.
+static int __attribute__((unused))
+vmrange_ok(uint64 va, int n)
+{
+  if (va % PGSIZE != 0 || n < 1 || n > 64)
+    return 0;
+  if (va >= MAXVA || n * PGSIZE > MAXVA - va)
+    return 0;
+  return 1;
+}
+
+// q0: the physical address that user virtual address va maps to,
+// or -1 if the user cannot access va (no PTE, not valid, or not PTE_U).
+uint64
+vatopa(pagetable_t pagetable, uint64 va)
+{
+  // TODO (q0): walk the page table; -1 unless the page is valid and
+  // user-accessible.
+  return -1;
+}
+
+// q1: set bit i of *mask if page i of [va, va + n pages) is dirty, clear
+// those dirty bits, and return how many were set.  Unmapped pages are
+// clean.  -1 on a bad range.
+int
+pgdirty(pagetable_t pagetable, uint64 va, int n, uint64 *mask)
+{
+  // TODO (q1): collect and clear the dirty bits of the mapped pages,
+  // flush the TLB, return the count.
+  return -1;
+}
+
+// q2: make the n pages at va writable or read-only.  -1 if the range is
+// bad or any page is not mapped for the user; then nothing is changed.
+int
+pgprotect(pagetable_t pagetable, uint64 va, int n, int writable)
+{
+  // TODO (q2): check every page first, then set or clear PTE_W.
+  return -1;
+}
+
+// q3: snapshot of one region of the user address space, kept in a shadow
+// page table whose leaves point at the kernel's copies of the pages.
+
+// Free the snapshot, if any.
+void
+ckpt_free(struct proc *p)
+{
+  // TODO (q3): free the copies and the shadow page table.
+}
+
+// Take the snapshot of [va, va + n pages), or refresh it: copy every page
+// that has no copy yet or is dirty, and clear the dirty bits.  Returns the
+// number of pages copied; -1 on a bad range, a page the user cannot access,
+// a region different from the existing snapshot, or out of memory.
+int
+ckpt_take(struct proc *p, uint64 va, int n)
+{
+  // TODO (q3): copy the pages without a copy or with PTE_D set into
+  // the shadow page table, clear PTE_D, return how many were copied.
+  return -1;
+}
+
+// Copy back every page the user has modified since the last checkpoint
+// (or rollback), and clear the dirty bits.  Returns the number of pages
+// restored; -1 if there is no snapshot or a page of the region is no
+// longer mapped.
+int
+ckpt_rollback(struct proc *p)
+{
+  // TODO (q3): copy the dirty pages back from the shadow page table,
+  // clear PTE_D, return how many were restored.
+  return -1;
+}

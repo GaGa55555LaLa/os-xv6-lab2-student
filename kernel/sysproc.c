@@ -110,3 +110,60 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// --- Virtual memory lab -------------------------------------------------
+
+uint64
+sys_vatopa(void)
+{
+  uint64 va;
+
+  argaddr(0, &va);
+  return vatopa(myproc()->pagetable, va);
+}
+
+uint64
+sys_pgdirty(void)
+{
+  struct proc *p = myproc();
+  uint64 va, maskp, mask;
+  int n, r;
+
+  argaddr(0, &va);
+  argint(1, &n);
+  argaddr(2, &maskp);
+  if ((r = pgdirty(p->pagetable, va, n, &mask)) < 0)
+    return -1;
+  if (copyout(p->pagetable, p->sz, maskp, (char *)&mask, sizeof(mask)) < 0)
+    return -1;
+  return r;
+}
+
+uint64
+sys_pgprotect(void)
+{
+  uint64 va;
+  int n, writable;
+
+  argaddr(0, &va);
+  argint(1, &n);
+  argint(2, &writable);
+  return pgprotect(myproc()->pagetable, va, n, writable);
+}
+
+uint64
+sys_checkpoint(void)
+{
+  uint64 va;
+  int n;
+
+  argaddr(0, &va);
+  argint(1, &n);
+  return ckpt_take(myproc(), va, n);
+}
+
+uint64
+sys_rollback(void)
+{
+  return ckpt_rollback(myproc());
+}

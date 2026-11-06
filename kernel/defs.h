@@ -170,6 +170,12 @@ int             copyin(pagetable_t, uint64, char *, uint64, uint64);
 int             copyinstr(pagetable_t, uint64, char *, uint64, uint64);
 int             ismapped(pagetable_t, uint64);
 uint64          vmfault(pagetable_t, uint64, uint64, int);
+uint64          vatopa(pagetable_t, uint64);
+int             pgdirty(pagetable_t, uint64, int, uint64 *);
+int             pgprotect(pagetable_t, uint64, int, int);
+int             ckpt_take(struct proc *, uint64, int);
+int             ckpt_rollback(struct proc *);
+void            ckpt_free(struct proc *);
 
 // plic.c
 void            plicinit(void);

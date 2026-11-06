@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""Grade the virtual memory lab.
+
+    ./grade                       run every test
+    ./grade pa_lazy ckpt_incr     run some tests
+
+Builds xv6 on one CPU, runs vmcheck, and compares its "ev" lines with the
+expected ones. Points: q0, q1, q2 10 each (pa_*, dirty_*, prot_*), q3 70
+(ckpt_*).
+"""
+
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+
+# BEGIN EXPECTED
+POINTS = {
+    'pa_offset': 2.5, 'pa_lazy': 2.5, 'pa_guard': 2.5, 'pa_fork': 2.5,
+    'dirty_mask': 2.5, 'dirty_clear': 2.5, 'dirty_again': 2.5, 'dirty_args': 2.5,
+    'prot_kill': 2.5, 'prot_read': 2.5, 'prot_restore': 2.5, 'prot_unmapped': 2.5,
+    'ckpt_first': 7, 'ckpt_incr': 7, 'ckpt_rollback': 7, 'ckpt_twice': 7, 'ckpt_clean': 7,
+    'ckpt_pgdirty': 7, 'ckpt_fork': 7, 'ckpt_exec': 7, 'ckpt_leak': 7, 'ckpt_args': 7,
+}
+EXPECTED = {
+    'pa_offset': [
+        "ev mapped 1",
+        "ev aligned 1",
+        "ev offset 1 1",
+        "ev ram 1",
+    ],
+    'pa_lazy': [
+        "ev untouched -1",
+        "ev touched 1",
+        "ev next_untouched -1",
+        "ev read_faults_in 1 1",
+    ],
+    'pa_guard': [
+        "ev stack 1",
+        "ev guard -1",
+        "ev end -1",
+        "ev trampoline -1",
+        "ev maxva -1",
+    ],
+    'pa_fork': [
+        "ev child_copy 1 1",
+        "ev child_page1 1",
+        "ev parent_same 1",
+    ],
+    'dirty_mask': [
+        "ev fresh 0 0x0",
+        "ev written 3 0x25",
+    ],
+    'dirty_clear': [
+        "ev first 2 0x3",
+        "ev second 0 0x0",
+        "ev after_read 0 0x0 3",
+    ],
+    'dirty_again': [
+        "ev first 1 0x2",
+        "ev again 1 0x2",
+        "ev outside 0 0x0",
+        "ev still 1 0x2",
+    ],
+    'dirty_args': [
+        "ev zero -1",
+        "ev many -1",
+        "ev unaligned -1",
+        "ev maxva -1",
+        "ev lazy 1 0x2",
+        "ev beyond 0 0x0",
+    ],
+    'prot_kill': [
+        "ev protect 0",
+        "ev killed -1",
+        "ev value 1",
+    ],
+    'prot_read': [
+        "ev read 5 6",
+        "ev mapped 1",
+        "ev dirty 2 0x3",
+    ],
+    'prot_restore': [
+        "ev rw 0",
+        "ev child_wrote",
+        "ev child 0",
+        "ev value 3",
+    ],
+    'prot_unmapped': [
+        "ev partial -1",
+        "ev child_wrote",
+        "ev unchanged 0",
+        "ev lazy -1",
+        "ev zero -1",
+        "ev beyond -1",
+        "ev one 0",
+    ],
+    'ckpt_first': [
+        "ev first 8",
+        "ev again 0",
+        "ev values 10 11 12 13 14 15 16 17",
+    ],
+    'ckpt_incr': [
+        "ev two 2",
+        "ev one 1",
+        "ev none 0",
+        "ev values 10 201 12 13 104 15 16 17",
+    ],
+    'ckpt_rollback': [
+        "ev take 8",
+        "ev rollback 3",
+        "ev values 10 11 12 13 14 15 16 17",
+    ],
+    'ckpt_twice': [
+        "ev first 1",
+        "ev second 0",
+        "ev third 1",
+        "ev values 10 11 12 13",
+    ],
+    'ckpt_clean': [
+        "ev rollback 1",
+        "ev checkpoint 0",
+        "ev refresh 1",
+        "ev nothing 0",
+        "ev values 10 11 80 13",
+    ],
+    'ckpt_pgdirty': [
+        "ev dirty 1 0x1",
+        "ev rollback 0",
+        "ev values 90 11 12 13",
+        "ev checkpoint 1",
+        "ev rollback2 1",
+        "ev values 10 91 12 13",
+    ],
+    'ckpt_fork': [
+        "ev child_rollback -1",
+        "ev child_checkpoint 4",
+        "ev child_rollback2 1",
+        "ev values 55 11 12 13",
+        "ev parent_rollback 1",
+        "ev values 10 11 12 13",
+    ],
+    'ckpt_exec': [
+        "ev take 4",
+        "ev after_exec -1",
+        "ev child 0",
+    ],
+    'ckpt_leak': [
+        "ev alloc 1",
+        "ev checkpoint 64",
+    ],
+    'ckpt_args': [
+        "ev unaligned -1",
+        "ev zero -1",
+        "ev many -1",
+        "ev lazy -1",
+        "ev no_snapshot -1",
+        "ev take 4",
+        "ev other -1",
+        "ev other2 -1",
+        "ev same 0",
+        "ev shrunk -1",
+        "ev shrunk_checkpoint -1",
+    ],
+}
+# END EXPECTED
+
+
+BUILD = ["make", "kernel/kernel", "fs.img"]
+QEMU = ["make", "qemu"]
+CHECK = "vmcheck"
+LOG = "grade.out"
+
+BOOT_TIMEOUT = 60  # seconds for xv6 to reach the shell
+TEST_TIMEOUT = 15  # seconds for one test (most take well under 1)
+
+
+class XV6:
+    """xv6 running in qemu on one CPU."""
+
+    def __init__(self, log):
+        self.log = log
+        # own process group, so that killing it also kills qemu (a child of make)
+        self.p = subprocess.Popen(QEMU, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT, start_new_session=True)
+        os.set_blocking(self.p.stdout.fileno(), False)
+        self.out = b""
+        self.booted = self.wait(lambda: b"$ " in self.out, BOOT_TIMEOUT)
+
+    def wait(self, done, timeout):
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                chunk = os.read(self.p.stdout.fileno(), 65536)
+                self.out += chunk
+                self.log.write(chunk)
+            except BlockingIOError:
+                if self.p.poll() is not None:
+                    return done()
+                time.sleep(0.1)
+            if done():
+                return True
+        return False
+
+    def run(self, cmd, timeout):
+        """Run cmd in the shell; return its output and whether it finished."""
+        mark = len(self.out)
+        self.p.stdin.write((cmd + "\n").encode())
+        self.p.stdin.flush()
+        ok = self.wait(lambda: self.out.rfind(b"\n$ ") > mark, timeout)
+        return self.out[mark:].decode(errors="replace").replace("\r", ""), ok
+
+    def close(self):
+        try:
+            os.killpg(self.p.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        self.p.wait()
+
+
+def run_tests(names):
+    """Run each test in xv6, rebooting after a test that hangs or panics."""
+    subprocess.run(BUILD, check=True, stdout=subprocess.DEVNULL)
+    out = ""
+    vm = None
+    with open(LOG, "wb") as log:
+        for n in names:
+            if vm is None:
+                vm = XV6(log)
+                if not vm.booted:
+                    print(f"xv6 did not reach the shell within {BOOT_TIMEOUT}s (see {LOG})")
+                    break
+            text, ok = vm.run(f"{CHECK} {n}", TEST_TIMEOUT)
+            out += text
+            if not ok:
+                print(f"{n}: did not finish within {TEST_TIMEOUT}s, restarting xv6")
+                vm.close()
+                vm = None
+        if vm:
+            vm.close()
+    return out
+
+
+def main():
+    names = sys.argv[1:] or list(EXPECTED)
+    for n in names:
+        if n not in EXPECTED:
+            sys.exit(f"unknown test {n}; tests: {' '.join(EXPECTED)}")
+    out = run_tests(names)
+
+    score = total = 0
+    for n in names:
+        total += POINTS[n]
+        m = re.search(rf"^test {re.escape(n)}: (.*?)\n(.*?)^end {re.escape(n)}$", out, re.S | re.M)
+        if not m:
+            print(f"{n}: FAIL (no output; see grade.out)")
+            continue
+        what = m.group(1)
+        got = [l for l in m.group(2).splitlines() if l.startswith("ev ")]
+        want = EXPECTED[n]
+        if got == want:
+            score += POINTS[n]
+            print(f"{n}: OK ({POINTS[n]:g}/{POINTS[n]:g})")
+            continue
+        i = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+        print(f"{n}: FAIL (0/{POINTS[n]:g})  -- {what}")
+        print(f"    first difference at line {i}:")
+        for k in range(max(0, i - 3), i):
+            print(f"      {want[k]}")
+        print(f"    expected: {want[i] if i < len(want) else '(no more lines)'}")
+        print(f"    got:      {got[i] if i < len(got) else '(no more lines)'}")
+    print(f"score: {score:g}/{total:g}")
+
+
+if __name__ == "__main__":
+    main()

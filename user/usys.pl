@@ -43,3 +43,8 @@ entry("sbrk");
 entry("pause");
 entry("uptime");
 entry("sync");
+entry("vatopa");
+entry("pgdirty");
+entry("pgprotect");
+entry("checkpoint");
+entry("rollback");
