@@ -1,15 +1,19 @@
+# xv6 Virtual Memory Lab
+
 ## Introduction
 
 You are adding a save system to xv6. A game keeps its state in a few pages of memory; *save* should remember them and *load* should put them back. Copying every page on every save is wasteful: between two saves the player usually touches one or two pages. The hardware already records which pages were written (the dirty bit in each page-table entry), so the kernel can copy only those.
 
-The lab builds that in four steps, all in `kernel/vm.c`. The first three are the parts the last one needs:
+The lab builds that in four problems, all in `kernel/vm.c`:
 
-| In the game | System call | Problem |
-| ----------- | ----------- | ------- |
-| where does this page really live? | `vatopa` | q0 |
-| which pages changed since the last save? | `pgdirty` | q1 |
-| anti-cheat: lock the gold page | `pgprotect` | q2 |
-| save / load | `checkpoint` / `rollback` | q3 |
+| Problem | System call | In the game | Points |
+| ------- | ----------- | ----------- | ------ |
+| q0 | `vatopa(va)`: virtual to physical address | where does this page really live? | 10 |
+| q1 | `pgdirty(va, n, &mask)`: read and clear the dirty bits | which pages changed since the last save? | 10 |
+| q2 | `pgprotect(va, n, writable)`: make pages read-only or writable | anti-cheat: lock the gold page | 10 |
+| q3 | `checkpoint(va, n)` / `rollback()`: an incremental snapshot of a memory region | save / load | 70 |
+
+Do them in order: q3 uses what you learn in q0–q2.
 
 The story ends here: the sections below are the spec, and `vmcheck` and `./grade` test the system calls, not a game. `savegame` is a toy that plays with them, so you can watch your kernel work; it is not graded.
 
@@ -24,6 +28,14 @@ The following is already done; you do not need to implement it:
 - User programs: `vmcheck`, `vmtest`, `savegame`. Self-check: `./grade`.
 
 ## Instructions
+
+### Getting started
+
+```sh
+git clone https://github.com/GaGa55555LaLa/os-xv6-lab2-student.git
+```
+
+Everything is on branch `main`; commit your work there. Do not push it to a public repo (for example a fork of this one): everyone could see your code.
 
 ### Environment
 
@@ -171,32 +183,49 @@ This xv6 project is worth **7 points** of the course grade: Implementation 3, La
 
 The four problems add up to 100 points, scaled to 3:
 
-| Problem | Tests | Points | Public (40%) | Private (60%) |
-| ------- | ----- | ------ | ------------ | ------------- |
-| q0 `vatopa` | `pa_*` | 10 | `./grade` (4 tests) | hidden tests |
-| q1 `pgdirty` | `dirty_*` | 10 | `./grade` (4 tests) | hidden tests, 10 hidden seeds |
-| q2 `pgprotect` | `prot_*` | 10 | `./grade` (4 tests) | hidden tests |
-| q3 `checkpoint` / `rollback` | `ckpt_*` | 70 | `./grade` (10 tests) | hidden tests, 10 hidden seeds |
+| Problem | Points | Public (40%) | Private (60%) |
+| ------- | ------ | ------------ | ------------- |
+| q0 `vatopa` | 10 | `./grade` (4 tests) | hidden tests |
+| q1 `pgdirty` | 10 | `./grade` (4 tests) | hidden tests, 10 hidden seeds |
+| q2 `pgprotect` | 10 | `./grade` (4 tests) | hidden tests |
+| q3 `checkpoint` / `rollback` | 70 | `./grade` (10 tests) | hidden tests, 10 hidden seeds |
 
 **Submission**
 - The TAs grade the last commit on `main` in your zip. Uncommitted changes are not graded.
 - The TAs use their own copies of `./grade` and the protected files listed under Rules.
 - Build failure: 0 for the whole lab.
 - Kernel panic or hang: 0 for the affected test or seed.
+- Timeout: 15 s per test or seed (a correct run takes well under a second; `ckpt_leak` a few seconds).
 
 **Suggestions for Testing**
 
-Passing `./grade` does not guarantee passing the hidden tests. To improve your confidence:
+Passing `./grade` does not guarantee passing the hidden tests. To improve your confidence, we encourage you to:
 
-- Add your own tests to `user/vmcheck.c` (they are overwritten when grading) and check the `ev` lines against the rules by hand.
-- Run `vmtest` with a few seeds and follow a short run by hand: after a `checkpoint`, the next `rollback` returns the number of distinct pages written in between.
-- Run `usertests -q`: your changes to `freeproc()` / `exec()` paths must not break the rest of xv6.
+- Add your own tests to `user/vmcheck.c` and check the `ev` lines against the rules by hand; your changes there are overwritten when grading.
+- Run `vmtest` with a few seeds (e.g., `7`, `42`) and follow a short run by hand: after a `checkpoint`, the next `rollback` returns the number of distinct pages written in between.
+- Run `usertests -q`: your changes must not break the rest of xv6.
 
 Hidden tests include 64-page ranges, regions that are partly lazy, read-only pages inside a region, and processes that fork, exec and exit with a snapshot.
 
 ### Lab quiz (4 points)
 
 Covers the Trace Code section, and may also cover your implementation.
+
+## Submission
+
+1. Commit your work on `main`. Uncommitted changes are not graded.
+2. Zip the whole `os-xv6-lab2-student` folder, including the hidden `.git` folder, as `<student_id>.zip`. Run `make clean` first to keep it small. From the folder that contains `os-xv6-lab2-student`:
+
+```sh
+zip -r <student_id>.zip os-xv6-lab2-student                 # macOS / Linux
+tar -a -c -f <student_id>.zip os-xv6-lab2-student           # Windows (PowerShell)
+```
+
+3. Upload `<student_id>.zip` to eLearn.
+
+## Deadline
+
+**2026/11/23 23:59 (UTC+8).** Your zip must be uploaded to eLearn by then.
 
 ## Using AI tools
 
