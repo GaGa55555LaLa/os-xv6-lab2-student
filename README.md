@@ -17,9 +17,31 @@ This xv6 project is worth **7 points** of the course grade: Implementation 3, La
 
 ### Implementation (3 points)
 
-The four problems add up to 100 points, scaled to 3. Each problem is graded 40% on the public tests (`./grade`) and 60% on hidden tests; see `vm-spec.md`.
+The four problems add up to 100 points, scaled to 3:
 
-- The TAs rebuild and run the last commit on `main` in your zip. Uncommitted changes are not graded. A build failure gives 0 for the lab; a kernel panic or timeout gives 0 for that test.
+| Problem | Tests | Points | Public (40%) | Private (60%) |
+| ------- | ----- | ------ | ------------ | ------------- |
+| q0 `vatopa` | `pa_*` | 10 | `./grade` (4 tests) | hidden tests |
+| q1 `pgdirty` | `dirty_*` | 10 | `./grade` (4 tests) | hidden tests, 10 hidden `vmtest` seeds |
+| q2 `pgprotect` | `prot_*` | 10 | `./grade` (4 tests) | hidden tests |
+| q3 `checkpoint` / `rollback` | `ckpt_*` | 70 | `./grade` (10 tests) | hidden tests, 10 hidden `vmtest` seeds |
+
+**Submission**
+- The TAs grade the last commit on `main` in your zip. Uncommitted changes are not graded.
+- The TAs use their own copies of `./grade` and the protected files listed under Rules in `vm-spec.md`.
+- Build failure: 0 for the whole lab.
+- Kernel panic or hang: 0 for the affected test or seed.
+- Timeout: 15 s per test or seed (a correct run takes well under a second; `ckpt_leak` a few seconds).
+
+**Suggestions for Testing**
+
+Passing `./grade` does not guarantee passing the hidden tests. To improve your confidence, we encourage you to:
+
+- Add your own tests to `user/vmcheck.c` and check the `ev` lines against the rules by hand; your changes there are overwritten when grading.
+- Run `vmtest` with a few seeds (e.g., `7`, `42`) and follow a short run by hand: after a `checkpoint`, the next `rollback` returns the number of distinct pages written in between.
+- Run `usertests -q`: your changes must not break the rest of xv6.
+
+Hidden tests include 64-page ranges, regions that are partly lazy, read-only pages inside a region, and processes that fork, exec and exit with a snapshot.
 
 ### Lab quiz (4 points)
 
