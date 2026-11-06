@@ -26,3 +26,4 @@
 #define SYS_pgprotect  25
 #define SYS_checkpoint 26
 #define SYS_rollback   27
+#define SYS_pgdump     28

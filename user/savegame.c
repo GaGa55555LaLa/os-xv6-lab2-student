@@ -18,6 +18,7 @@
 //   d       which pages changed since the last save? pgdirty() tells, but
 //           also forgets, so a later load will not undo those pages
 //   m       map: the physical address of every page (vatopa)
+//   p       page table: every PTE of the 8 pages, and the snapshot's (pgdump)
 //   c       cheat: write the gold page directly. The anti-cheat kills you.
 //   q       quit
 
@@ -106,7 +107,7 @@ main(void)
   }
   if (pgprotect(GOLDPAGE, 1, 0) < 0)
     printf("savegame: pgprotect failed, the anti-cheat is off (q2)\n");
-  printf("savegame: Enter = roll, s = save, l = load, d = changed pages, m = map, c = cheat, q = quit\n");
+  printf("savegame: Enter = roll, s = save, l = load, d = changed pages, m = map, p = page table, c = cheat, q = quit\n");
   show();
   for (;;) {
     printf("> ");
@@ -144,6 +145,9 @@ main(void)
         printf("%s\n", i == 1 ? "  (gold, read-only)" : "");
       }
       break;
+    case 'p':
+      pgdump(mem, NPG);
+      break;
     case 'c':
       printf("cheating: writing the gold page directly...\n");
       GOLD = 9999;
@@ -153,7 +157,7 @@ main(void)
     case 0:  // end of input
       exit(0);
     default:
-      printf("Enter, s, l, d, m, c or q\n");
+      printf("Enter, s, l, d, m, p, c or q\n");
     }
   }
 }

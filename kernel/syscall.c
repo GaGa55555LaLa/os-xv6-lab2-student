@@ -108,6 +108,7 @@ extern uint64 sys_pgdirty(void);
 extern uint64 sys_pgprotect(void);
 extern uint64 sys_checkpoint(void);
 extern uint64 sys_rollback(void);
+extern uint64 sys_pgdump(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -140,6 +141,7 @@ static uint64 (*syscalls[])(void) = {
   [SYS_pgprotect]  = sys_pgprotect,
   [SYS_checkpoint] = sys_checkpoint,
   [SYS_rollback]   = sys_rollback,
+  [SYS_pgdump]     = sys_pgdump,
   // clang-format on
 };
 

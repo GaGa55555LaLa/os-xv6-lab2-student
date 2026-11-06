@@ -30,6 +30,7 @@ int pgdirty(void *, int, uint64 *);
 int pgprotect(void *, int, int);
 int checkpoint(void *, int);
 int rollback(void);
+int pgdump(void *, int);
 
 // ulib.c
 int stat(const char *, struct stat *);

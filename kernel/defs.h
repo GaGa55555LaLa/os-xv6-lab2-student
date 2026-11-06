@@ -175,6 +175,7 @@ int             pgdirty(pagetable_t, uint64, int, uint64 *);
 int             pgprotect(pagetable_t, uint64, int, int);
 int             ckpt_take(struct proc *, uint64, int);
 int             ckpt_rollback(struct proc *);
+int             vmdump(struct proc *, uint64, int);
 void            ckpt_free(struct proc *);
 
 // plic.c

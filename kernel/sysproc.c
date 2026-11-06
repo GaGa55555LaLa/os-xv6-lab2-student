@@ -167,3 +167,15 @@ sys_rollback(void)
 {
   return ckpt_rollback(myproc());
 }
+
+// Debugging aid: print the page-table entries of n pages at va.
+uint64
+sys_pgdump(void)
+{
+  uint64 va;
+  int n;
+
+  argaddr(0, &va);
+  argint(1, &n);
+  return vmdump(myproc(), va, n);
+}

@@ -48,3 +48,4 @@ entry("pgdirty");
 entry("pgprotect");
 entry("checkpoint");
 entry("rollback");
+entry("pgdump");

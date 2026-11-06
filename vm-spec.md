@@ -74,6 +74,7 @@ $ vmcheck                      # 22 small fixed tests
 $ vmcheck ckpt_incr            # one of them
 $ vmtest 42                    # a random workload; 42 is the seed
 $ savegame                     # the toy game (not graded); q to quit
+$ pgdump                       # print a few page-table entries, flags included
 ```
 
 `./grade` builds, boots xv6, runs every `vmcheck` test and prints a score out of 100.
@@ -93,11 +94,24 @@ end ckpt_incr
 
 Each test prints `ev` lines; `./grade` compares them with the expected ones and shows the first difference. The kernel may print `usertrap(): unexpected scause ...` in between: some tests make a child process write to a read-only page on purpose.
 
+`pgdump [va n]` prints the page-table entries of `n` pages at `va` (hex), level by level, with each PTE's value, physical page and flags; with no arguments it shows four heap pages in different states. The same call works from your own tests (`pgdump(va, n)`), and `p` in `savegame` shows the game's pages and their snapshot. Example (made up):
+
+```
+user page table, root 0x87f25000
+ L2[0] -> page-table page 0x87f21000
+  L1[0] -> page-table page 0x87f20000
+   L0[4]  va 0x4000  pte 0x21fc98d7  pa 0x87f26000  V R W . U A D
+   L0[5]  va 0x5000  pte 0x21fd5013  pa 0x87f54000  V R . . U . .
+   L0[7]  va 0x7000  pte 0x0  not mapped
+shadow page table (snapshot copies), root 0x87f49000
+   L0[4]  va 0x4000  pte 0x21fc9c03  pa 0x87f27000  V R . . . . .
+```
+
 `vmtest <seed>` draws a sequence of writes, `pgdirty`, `checkpoint` and `rollback` calls on a 16-page region and prints the result of each. The hidden tests use seeds you do not know; the public repo has no reference output, so check a short run against the rules by hand.
 
 ## Implementation
 
-Fill in the six functions marked `TODO` at the end of `kernel/vm.c`. Everything around them is already there: the system call numbers and wrappers (`kernel/syscall.*`, `kernel/sysproc.c`, `user/user.h`, `user/usys.pl`), `PTE_A` / `PTE_D` in `kernel/riscv.h`, the fields `shadow`, `ckpt_va`, `ckpt_n` in `struct proc`, the calls to `ckpt_free()` in `freeproc()` and `exec()`, the range check `vmrange_ok()`, and the test programs. `sbrklazy(n)` in the user library grows the heap without mapping pages (a page is mapped on its first access, in `vmfault()`); the tests use it to make pages that exist in `sz` but not in the page table.
+Fill in the six functions marked `TODO` at the end of `kernel/vm.c`. Everything around them is already there: the system call numbers and wrappers (`kernel/syscall.*`, `kernel/sysproc.c`, `user/user.h`, `user/usys.pl`), `PTE_A` / `PTE_D` in `kernel/riscv.h`, the fields `shadow`, `ckpt_va`, `ckpt_n` in `struct proc`, the calls to `ckpt_free()` in `freeproc()` and `exec()`, the range check `vmrange_ok()`, the test programs, and `pgdump` (below). `sbrklazy(n)` in the user library grows the heap without mapping pages (a page is mapped on its first access, in `vmfault()`); the tests use it to make pages that exist in `sz` but not in the page table.
 
 ### Conventions
 
@@ -192,10 +206,25 @@ What you need to know, in the order you need it. Everything named here is in `ke
 | `kalloc()`, `kfree(pa)` | one physical page |
 | `memmove(dst, src, n)` | copy bytes; the kernel can use physical addresses directly |
 | `sfence_vma()` | flush the TLB |
+| `pgdump(va, n)` (user) | print the PTEs, to see what your code did |
 
 ### Page tables (q0)
 
 - **Sv39.** A virtual address has 39 bits: three 9-bit indexes (`PX(2, va)`, `PX(1, va)`, `PX(0, va)`) and a 12-bit page offset. `walk()` follows the three levels; never dereference the 0 it returns when a level is missing.
+
+```
+va = 0x5ABC          |  L2 = 0  |  L1 = 0  |  L0 = 5  |  offset = 0xABC  |
+                        9 bits     9 bits     9 bits       12 bits
+                           |          |          |
+satp -> root page          |          |          |
+        [0] ---------------+--> L1 page          |
+                                [0] -------------+--> L0 page
+                                                      [5] = pte
+pte  = | PPN (44 bits)              | RSW | D A G U X W R V |
+         |                                  flags (low 10 bits)
+         +--> PTE2PA(pte) = 0x87F27000  (start of the physical page)
+              physical address = 0x87F27000 + 0xABC
+```
 - **PTE → physical address.** A PTE is `PPN << 10 | flags`. `PTE2PA(pte)` gives the *start* of the physical page; add the page offset, `va % PGSIZE`. Compare `walkaddr()` (no offset) with `pa0 + (dstva - va0)` in `copyout()`.
 - **Who has `PTE_U`.** The trampoline, the trapframe and the stack guard page (`uvmclear()` in `exec()`) are in the page table without `PTE_U`; a lazy page that was never touched has no PTE at all. Both must give `-1`.
 - **`-1` as `uint64`** is `(uint64)-1`, all bits set; the user library compares against that.
@@ -213,6 +242,16 @@ What you need to know, in the order you need it. Everything named here is in `ke
 - **"Change no page on error"** means two loops: the first only checks, the second only writes.
 
 ### The snapshot (q3)
+
+```
+user page table (p->pagetable)      physical pages          shadow page table (p->shadow)
+ L0[5]  V R W U A D  -----------> page 0x87F27000            L0[5]  V R  ---> copy 0x87F2C000
+ L0[6]  V R . U A .  -----------> page 0x87F54000            L0[6]  V R  ---> copy 0x87F2B000
+ L0[7]  V R W U A .  -----------> page 0x87F53000            L0[7]  no copy yet
+
+checkpoint: for each page with no copy or with D:  memmove(copy, page), clear D
+rollback:   for each page with D:                  memmove(page, copy), clear D
+```
 
 - **The shadow page table** starts as `uvmcreate()`. `walk(p->shadow, va, 1)` gives the leaf slot for `va`, creating the levels on the way.
 - **A copy** is a page from `kalloc()`, filled with `memmove()`, installed as `*spte = PA2PTE(mem) | PTE_V | PTE_R`. A leaf needs `PTE_V` and at least one of `PTE_R` / `PTE_W` / `PTE_X`, or `freewalk()` mistakes it for a page-table page and panics.

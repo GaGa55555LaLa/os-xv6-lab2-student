@@ -153,6 +153,7 @@ UPROGS=\
 	$U/_vmcheck\
 	$U/_vmtest\
 	$U/_savegame\
+	$U/_pgdump\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

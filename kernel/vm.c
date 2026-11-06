@@ -490,6 +490,85 @@ ismapped(pagetable_t pagetable, uint64 va)
   return 0;
 }
 
+// --- Page-table dump (debugging aid, not graded) ------------------------
+
+static void
+dumpflags(pte_t pte)
+{
+  static const struct { uint64 bit; char c; } f[] = {
+    {PTE_V, 'V'}, {PTE_R, 'R'}, {PTE_W, 'W'}, {PTE_X, 'X'},
+    {PTE_U, 'U'}, {PTE_A, 'A'}, {PTE_D, 'D'},
+  };
+  for (int i = 0; i < 7; i++)
+    printk(" %c", (pte & f[i].bit) ? f[i].c : '.');
+}
+
+// Print the three levels of pagetable for the n pages at va: the
+// page-table pages on the way, and every leaf PTE with its physical
+// page and flags.
+static void
+dumptable(char *title, pagetable_t pagetable, uint64 va, int n)
+{
+  int l2 = -1, l1 = -1;
+
+  printk("%s, root 0x%lx\n", title, (uint64)pagetable);
+  for (int i = 0; i < n; i++) {
+    uint64 a = va + i * PGSIZE;
+    if (a >= MAXVA)
+      break;
+    pte_t pte2 = pagetable[PX(2, a)];
+    if (PX(2, a) != l2) {
+      l2 = PX(2, a);
+      l1 = -1;
+      if (pte2 & PTE_V)
+        printk(" L2[%d] -> page-table page 0x%lx\n", l2, PTE2PA(pte2));
+      else
+        printk(" L2[%d] not present\n", l2);
+    }
+    if ((pte2 & PTE_V) == 0) {
+      printk("   va 0x%lx  no pte\n", a);
+      continue;
+    }
+    pte_t pte1 = ((pagetable_t)PTE2PA(pte2))[PX(1, a)];
+    if (PX(1, a) != l1) {
+      l1 = PX(1, a);
+      if (pte1 & PTE_V)
+        printk("  L1[%d] -> page-table page 0x%lx\n", l1, PTE2PA(pte1));
+      else
+        printk("  L1[%d] not present\n", l1);
+    }
+    if ((pte1 & PTE_V) == 0) {
+      printk("   va 0x%lx  no pte\n", a);
+      continue;
+    }
+    pte_t pte = ((pagetable_t)PTE2PA(pte1))[PX(0, a)];
+    printk("   L0[%d]  va 0x%lx  pte 0x%lx", (int)PX(0, a), a, pte);
+    if (pte & PTE_V) {
+      printk("  pa 0x%lx ", PTE2PA(pte));
+      dumpflags(pte);
+    } else {
+      printk("  not mapped");
+    }
+    printk("\n");
+  }
+}
+
+// pgdump(va, n): dump the user page table for the n pages at va, and
+// the shadow page table of the snapshot if there is one.
+int
+vmdump(struct proc *p, uint64 va, int n)
+{
+  if (n < 1 || n > 64 || va >= MAXVA)
+    return -1;
+  va = PGROUNDDOWN(va);
+  dumptable("user page table", p->pagetable, va, n);
+  if (p->shadow)
+    dumptable("shadow page table (snapshot copies)", p->shadow, va, n);
+  else
+    printk("no snapshot\n");
+  return 0;
+}
+
 // --- Virtual memory lab -------------------------------------------------
 //
 // Fill in every place marked TODO:
