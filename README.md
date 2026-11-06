@@ -52,3 +52,9 @@ Do not push your work to a public repo (for example a fork of this one): everyon
 ## Plagiarism check
 
 - Do not show your code to anyone.
+
+## Using AI tools
+
+- You may use generative AI tools (ChatGPT, Claude, Copilot, ...) for this lab.
+- You are responsible for every line you submit. The lab quiz (4 of the 7 points) asks you to trace the code and explain your implementation.
+- Do not share your code with other students, and do not push it to a public repository.
