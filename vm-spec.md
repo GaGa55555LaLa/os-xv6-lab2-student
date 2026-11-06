@@ -167,7 +167,38 @@ An incremental snapshot of one region of the process's memory, kept by the kerne
 
 - Frees the copies and the shadow page table, and resets the three fields. Already called from `freeproc()` and `exec()`. A process made by `fork()` starts without a snapshot (its `shadow` is 0; nothing to do).
 
-Hints: `walk(p->shadow, va, 1)` allocates the intermediate page-table pages of the shadow; a leaf you create there needs `PTE_V` and at least one of `PTE_R`/`PTE_W`/`PTE_X`, or `freewalk()` mistakes it for a page-table page. The region is at most 64 pages, so a loop over `i` is fine.
+## Hints
+
+What you need to know, in the order you need it. Everything named here is in `kernel/vm.c` or `kernel/riscv.h` unless said otherwise.
+
+### Page tables (q0)
+
+- Sv39: a virtual address has 39 bits, three 9-bit indexes (`PX(2, va)`, `PX(1, va)`, `PX(0, va)`) and a 12-bit page offset. `walk(pagetable, va, 0)` follows the three levels and returns a pointer to the leaf PTE, or 0 when an intermediate page-table page does not exist. Never dereference that 0.
+- A PTE is `PPN << 10 | flags`. `PTE2PA(pte)` drops the flags and gives the **start of the physical page**. The physical address of `va` is that plus the page offset, `va % PGSIZE` (or `va & (PGSIZE - 1)`). Compare `walkaddr()`, which returns no offset, with `pa0 + (dstva - va0)` in `copyout()`.
+- Flags: `PTE_V` (valid), `PTE_R` / `PTE_W` / `PTE_X`, `PTE_U` (user mode may use the page), `PTE_A`, `PTE_D`. A page the user can access has both `PTE_V` and `PTE_U`. The trampoline, the trapframe and the stack guard page (`uvmclear()` in `exec()`) have PTEs without `PTE_U`; a lazy page that was never touched has no PTE at all.
+- The return type is `uint64`, so `-1` is `(uint64)-1`, all bits set; the user library compares against that.
+
+### Dirty bits and the TLB (q1)
+
+- The CPU sets `PTE_D` in the PTE when a user-mode store hits the page, and `PTE_A` on any access (`kernel/start.c` enables this with `MENVCFG_ADUE`). The hardware never clears them; you do, with `*pte &= ~PTE_D`.
+- The TLB (the CPU's cache of recent translations) may hold a copy of the PTE. After changing a PTE, call `sfence_vma()`, which flushes it, so the next access reads the PTE from memory again. Otherwise the CPU can keep using a cached entry that already has `D` set, never write the bit again, and a later store goes unnoticed.
+- Only user-mode stores reach the user's PTE. `copyout()` writes through the kernel page table (`kvmmake()` maps all of RAM at its own physical address), so a `read()` into the region marks nothing dirty.
+- Bit `i` of a 64-bit mask is `1UL << i`. `1 << i` is an `int` shift: for `i >= 32` it is undefined. Build the mask in your own variable; `sys_pgdirty()` in `kernel/sysproc.c` already copies it out to the user.
+
+### Permissions (q2)
+
+- Clear `PTE_W` and the next user store to that page traps with `scause` 15 (store page fault). `usertrap()` in `kernel/trap.c` calls `vmfault()`, which returns 0 because the page is already mapped, so the process is killed with `setkilled()`. Loads still work. Flush the TLB after changing the bit, or the old permission may stay cached.
+- "Change no page on error" means two loops: the first only checks, the second only writes.
+
+### The snapshot (q3)
+
+- `uvmcreate()` returns an empty top-level page-table page. `walk(p->shadow, va, 1)` allocates the intermediate pages and returns the leaf slot for `va`; it returns 0 only when `kalloc()` failed.
+- A copy is a page from `kalloc()`, filled with `memmove()`, installed as `*spte = PA2PTE(mem) | PTE_V | PTE_R`. A leaf needs `PTE_V` and at least one of `PTE_R` / `PTE_W` / `PTE_X`: `freewalk()` treats an entry with none of them as a page-table page and panics.
+- The kernel can read or write any physical page by its address, because the kernel page table maps all RAM 1:1. So `memmove((void *)PTE2PA(*spte), (void *)PTE2PA(*pte), PGSIZE)` copies a user page into its shadow, and the reverse restores it, whatever the user PTE's `PTE_W` says.
+- "The page has a copy" is `walk(p->shadow, va, 0)` returning a PTE with `PTE_V`. On the first call there are none, so every page is copied; later, copy a page if it has no copy or has `PTE_D`. The region is at most 64 pages, so a loop over `i` is fine.
+- Freeing is two steps: `uvmunmap(p->shadow, va, n, 1)` frees the copies and zeroes their leaf PTEs (it skips pages that have no copy), then `freewalk(p->shadow)` frees the page-table pages (it panics if a leaf is still there). Reset the three fields. When memory runs out halfway, call `ckpt_free()` yourself before returning `-1`: the process must not keep half a snapshot.
+- `fork()`: `uvmcopy()` copies the PTEs with their flags, so a child may start with `PTE_D` already set; harmless, because the first `checkpoint` copies everything anyway. `p->shadow` is not copied, so the child starts without a snapshot. `exec()` and `freeproc()` call `ckpt_free()` for you.
+- `rollback` must check that the region is still mapped: `sbrk(-n)` after a `checkpoint` can unmap part of it.
 
 ## Rules
 
