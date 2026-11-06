@@ -13,19 +13,9 @@ The lab builds that in four problems, all in `kernel/vm.c`:
 | q2 | `pgprotect(va, n, writable)`: make pages read-only or writable | anti-cheat: lock the gold page | 10 |
 | q3 | `checkpoint(va, n)` / `rollback()`: an incremental snapshot of a memory region | save / load | 70 |
 
-Do them in order: q3 uses what you learn in q0–q2.
+Do them in order: q3 uses what you learn in q0–q2. Due **2026/11/23 23:59 (UTC+8)** as a zip on eLearn (see [Submission](#submission)).
 
 The story ends here: the sections below are the spec, and `vmcheck` and `./grade` test the system calls, not a game. `savegame` is a toy that plays with them, so you can watch your kernel work; it is not graded.
-
-## Modifications (optional reading)
-
-The following is already done; you do not need to implement it:
-
-- `PTE_A` and `PTE_D` in `kernel/riscv.h`: the hardware sets `PTE_A` on any access to a page and `PTE_D` on a store, and never clears them.
-- `struct proc` has `shadow`, `ckpt_va` and `ckpt_n` for the snapshot. `freeproc()` and `exec()` call `ckpt_free()`.
-- The system call plumbing (`kernel/syscall.*`, `kernel/sysproc.c`, `user/user.h`, `user/usys.pl`) and `vmrange_ok()` in `kernel/vm.c`.
-- `sbrklazy(n)` grows the heap without mapping pages: a page is mapped on its first access, in `vmfault()`.
-- User programs: `vmcheck`, `vmtest`, `savegame`. Self-check: `./grade`.
 
 ## Instructions
 
@@ -67,6 +57,7 @@ docker run -it --rm --name xv6 `
 
 - Shortcut: `./lab shell` builds the image if needed and starts the container; `./lab grade` and `./lab make qemu` run one command in it (Linux, macOS, or Git Bash/WSL on Windows).
 - Quit QEMU: `Ctrl-a`, then `x`. Leave the container: `exit`.
+- You can also open the repo with VS Code [Dev Containers](https://code.visualstudio.com/docs/devcontainers/containers).
 - Windows: if `./grade` prints `env: $'python3\r': No such file or directory`, commit your changes first, then run:
 
 ```sh
@@ -74,8 +65,6 @@ git config core.autocrlf false
 git rm -r -q --cached .
 git reset -q --hard
 ```
-
-- You can also open the repo with VS Code [Dev Containers](https://code.visualstudio.com/docs/devcontainers/containers).
 
 ### Build and run
 
@@ -87,9 +76,9 @@ $ vmtest 42                    # a random workload; 42 is the seed
 $ savegame                     # the toy game (not graded); q to quit
 ```
 
-- Self-check: `./grade`.
+`./grade` builds, boots xv6, runs every `vmcheck` test and prints a score out of 100.
 
-### `vmcheck` output
+### What the tests print
 
 > **The output below is made up.** It only shows the format. Trust your own run.
 
@@ -106,6 +95,133 @@ Each test prints `ev` lines; `./grade` compares them with the expected ones and 
 
 `vmtest <seed>` draws a sequence of writes, `pgdirty`, `checkpoint` and `rollback` calls on a 16-page region and prints the result of each. The hidden tests use seeds you do not know; the public repo has no reference output, so check a short run against the rules by hand.
 
+## Implementation
+
+Fill in the six functions marked `TODO` at the end of `kernel/vm.c`. Everything around them is already there: the system call numbers and wrappers (`kernel/syscall.*`, `kernel/sysproc.c`, `user/user.h`, `user/usys.pl`), `PTE_A` / `PTE_D` in `kernel/riscv.h`, the fields `shadow`, `ckpt_va`, `ckpt_n` in `struct proc`, the calls to `ckpt_free()` in `freeproc()` and `exec()`, the range check `vmrange_ok()`, and the test programs. `sbrklazy(n)` in the user library grows the heap without mapping pages (a page is mapped on its first access, in `vmfault()`); the tests use it to make pages that exist in `sz` but not in the page table.
+
+### Conventions
+
+These hold for every problem below.
+
+- **Arguments.** `va` is a user virtual address, `n` a page count. A range is valid when `va` is page-aligned and `1 <= n <= 64` (`vmrange_ok()`); otherwise return `-1` and change nothing.
+- **Mapped** means: the PTE exists and has both `PTE_V` and `PTE_U`. A lazily allocated page that was never touched, the stack guard page, the trampoline and the trapframe are *not* mapped in this sense.
+- **Only user-mode stores count as writes.** The hardware sets `PTE_D` when user code stores to a page. The kernel writing into a user page (for example `read()`) does not set it, and you do not need to handle that.
+- **Flush the TLB** (`sfence_vma()`) after you change any PTE.
+- **Errors** return `-1`.
+
+### q0: `uint64 vatopa(void *va)` (10 points)
+
+*In the game: the `m` (map) command, which shows where every page really lives.*
+
+Return the physical address that `va` maps to, **including the page offset**. Return `-1` if `va >= MAXVA` or the page is not mapped. Do not map anything: a lazy page that was never touched gives `-1`.
+
+### q1: `int pgdirty(void *va, int n, uint64 *mask)` (10 points)
+
+*In the game: the `d` command, "which pages changed since the last save?"*
+
+For the `n` pages starting at `va`:
+
+- set bit `i` of `*mask` if page `i` has `PTE_D`,
+- clear `PTE_D` on those pages,
+- return how many bits are set.
+
+A page that is not mapped is clean; unmapped pages inside the range are not an error. Only the range itself is checked.
+
+```
+pages 0..3 of buf; user writes pages 1 and 3
+pgdirty(buf, 4, &m)   -> 2, m = 0b1010
+pgdirty(buf, 4, &m)   -> 0, m = 0        (the bits were cleared)
+```
+
+### q2: `int pgprotect(void *va, int n, int writable)` (10 points)
+
+*In the game: the anti-cheat. The gold page is locked; `c` writes to it anyway and the process is killed.*
+
+Make the `n` pages at `va` read-only (`writable == 0`: clear `PTE_W`) or writable again (`writable != 0`: set `PTE_W`). Return 0. If any page in the range is not mapped, return `-1` and change no page.
+
+A later store to a read-only page is a page fault that kills the process; `usertrap()` already does this, you do not change the trap handler.
+
+### q3: `checkpoint` / `rollback` (70 points)
+
+*In the game: `s` (save) and `l` (load).*
+
+An incremental snapshot of one region of the process's memory, kept by the kernel. The design is fixed: the copies live in a second page table, `p->shadow`, whose leaf PTEs point at the kernel's copies of the pages. The region is remembered in `p->ckpt_va` / `p->ckpt_n`. One snapshot per process.
+
+```
+checkpoint(buf, 4)    -> 4   first call: every page copied
+user writes pages 1 and 3
+checkpoint(buf, 4)    -> 2   only pages 1 and 3 copied again
+user writes page 0
+rollback()            -> 1   page 0 restored from its copy
+rollback()            -> 0   nothing written since
+```
+
+`int checkpoint(void *va, int n)`
+
+- The region must be mapped entirely; otherwise `-1`.
+- The first call creates the shadow page table (`uvmcreate()`) and copies every page of the region. It returns `n`.
+- A later call must give the same region, otherwise `-1`. It copies only the pages that have `PTE_D` set, and returns how many it copied (0 if nothing was written).
+- Every call clears `PTE_D` on the whole region and flushes the TLB.
+- If a page cannot be allocated, return `-1` and leave the process without a snapshot (free what was allocated).
+
+`int rollback(void)`
+
+- `-1` if the process has no snapshot, or a page of the region is no longer mapped (the heap shrank into it).
+- Copies back, from the shadow copies, only the pages that have `PTE_D` set; clears `PTE_D` on them; flushes the TLB; returns how many it restored.
+- The dirty bit is the only record of a write: a page that was written and then read by `pgdirty()` is clean, so `rollback` does not touch it.
+
+`void ckpt_free(struct proc *p)`
+
+- Frees the copies and the shadow page table, and resets the three fields. Already called from `freeproc()` and `exec()`.
+- A process made by `fork()` starts without a snapshot (its `shadow` is 0; nothing to free).
+
+## Hints
+
+What you need to know, in the order you need it. Everything named here is in `kernel/vm.c` or `kernel/riscv.h` unless said otherwise.
+
+### Toolbox
+
+| Function / macro | What it does |
+| ---------------- | ------------ |
+| `walk(pt, va, alloc)` | pointer to the leaf PTE of `va`; `alloc=1` creates missing page-table pages; returns 0 if they are missing (`alloc=0`) or `kalloc()` failed |
+| `PTE2PA(pte)`, `PA2PTE(pa)` | PTE → start of the physical page, and back |
+| `PTE_V PTE_R PTE_W PTE_X PTE_U PTE_A PTE_D` | the flag bits of a PTE |
+| `uvmcreate()` | a new, empty page table |
+| `uvmunmap(pt, va, n, do_free)` | zeroes `n` leaf PTEs from `va`, frees their pages if `do_free`; skips pages that are not mapped |
+| `freewalk(pt)` | frees the page-table pages; panics if a leaf is still mapped |
+| `kalloc()`, `kfree(pa)` | one physical page |
+| `memmove(dst, src, n)` | copy bytes; the kernel can use physical addresses directly |
+| `sfence_vma()` | flush the TLB |
+
+### Page tables (q0)
+
+- **Sv39.** A virtual address has 39 bits: three 9-bit indexes (`PX(2, va)`, `PX(1, va)`, `PX(0, va)`) and a 12-bit page offset. `walk()` follows the three levels; never dereference the 0 it returns when a level is missing.
+- **PTE → physical address.** A PTE is `PPN << 10 | flags`. `PTE2PA(pte)` gives the *start* of the physical page; add the page offset, `va % PGSIZE`. Compare `walkaddr()` (no offset) with `pa0 + (dstva - va0)` in `copyout()`.
+- **Who has `PTE_U`.** The trampoline, the trapframe and the stack guard page (`uvmclear()` in `exec()`) are in the page table without `PTE_U`; a lazy page that was never touched has no PTE at all. Both must give `-1`.
+- **`-1` as `uint64`** is `(uint64)-1`, all bits set; the user library compares against that.
+
+### Dirty bits and the TLB (q1)
+
+- **Who sets the bits.** The CPU sets `PTE_D` when a user-mode store hits the page and `PTE_A` on any access (`kernel/start.c` enables this with `MENVCFG_ADUE`). The hardware never clears them; you do, with `*pte &= ~PTE_D`.
+- **Why the flush.** The TLB (the CPU's cache of translations) may hold a copy of the PTE with `D` already set. Without `sfence_vma()` the CPU keeps using that copy, never writes the bit to memory again, and a later store goes unnoticed.
+- **Why `read()` does not count.** `copyout()` writes through the kernel page table (`kvmmake()` maps all of RAM at its own physical address), so the user's PTE is never touched.
+- **64-bit mask.** Bit `i` is `1UL << i`; `1 << i` is an `int` shift and undefined for `i >= 32`. Build the mask in your own variable; `sys_pgdirty()` in `kernel/sysproc.c` copies it out to the user.
+
+### Permissions (q2)
+
+- **What happens on a store.** Without `PTE_W`, a user store traps with `scause` 15 (store page fault). `usertrap()` in `kernel/trap.c` calls `vmfault()`, which returns 0 because the page is already mapped, so the process is killed with `setkilled()`. Loads still work.
+- **"Change no page on error"** means two loops: the first only checks, the second only writes.
+
+### The snapshot (q3)
+
+- **The shadow page table** starts as `uvmcreate()`. `walk(p->shadow, va, 1)` gives the leaf slot for `va`, creating the levels on the way.
+- **A copy** is a page from `kalloc()`, filled with `memmove()`, installed as `*spte = PA2PTE(mem) | PTE_V | PTE_R`. A leaf needs `PTE_V` and at least one of `PTE_R` / `PTE_W` / `PTE_X`, or `freewalk()` mistakes it for a page-table page and panics.
+- **Copying by physical address.** The kernel page table maps all RAM 1:1, so `memmove((void *)PTE2PA(*spte), (void *)PTE2PA(*pte), PGSIZE)` copies a user page into its shadow, and the reverse restores it, whatever the user PTE's `PTE_W` says.
+- **"Has a copy"** is `walk(p->shadow, va, 0)` returning a PTE with `PTE_V`. On the first call there are none, so every page is copied; later, copy a page if it has no copy or has `PTE_D`. The region is at most 64 pages, so a loop over `i` is fine.
+- **Freeing** is two steps: `uvmunmap(p->shadow, va, n, 1)` frees the copies and zeroes their leaf PTEs, then `freewalk(p->shadow)` frees the page-table pages. Reset the three fields. When memory runs out halfway, call `ckpt_free()` yourself before returning `-1`: the process must not keep half a snapshot.
+- **`fork()`.** `uvmcopy()` copies the PTEs with their flags, so a child may start with `PTE_D` already set; harmless, because the first `checkpoint` copies everything anyway. `p->shadow` is not copied, so the child starts without a snapshot.
+- **`rollback` after `sbrk(-n)`.** The heap can shrink into the region after a `checkpoint`; check that every page is still mapped before copying.
+
 ## Trace Code
 
 This is in the scope of the lab quiz. No report is needed.
@@ -118,91 +234,9 @@ This is in the scope of the lab quiz. No report is needed.
 - `PTE_A` / `PTE_D`: who sets them (`kernel/start.c`: `MENVCFG_ADUE`), who clears them, and why the TLB must be flushed (`sfence_vma()`) after the kernel changes a PTE. What could go wrong with more than one CPU?
 - `exec()` and `kfork()` (`uvmcopy()`): what happens to the page table, the PTE flags and the snapshot of the process.
 
-## Implementation
-
-Fill in the places marked `TODO` in `kernel/vm.c`. The system calls take a user virtual address `va`, a page count `n`, and return `-1` on error. In every range, `va` must be page-aligned and `1 <= n <= 64`; otherwise return `-1` and change nothing.
-
-A page is **mapped** when its PTE exists and has both `PTE_V` and `PTE_U`. A lazily allocated page that was never touched, the stack guard page, the trampoline and the trapframe are not mapped in this sense.
-
-**Only user-mode stores count** as writes everywhere below: the hardware sets `PTE_D` when user code stores to a page. The kernel writing into a user page (for example `read()`) does not set it, and you do not need to handle that.
-
-### q0: `uint64 vatopa(void *va)` (10 points)
-
-*In the game: the `m` (map) command, which shows where every page really lives.*
-
-The physical address that `va` maps to, with the page offset, or `-1` if `va` is not mapped (or `va >= MAXVA`). Do not map anything: a lazy page that was never touched gives `-1`.
-
-### q1: `int pgdirty(void *va, int n, uint64 *mask)` (10 points)
-
-*In the game: the `d` command, "which pages changed since the last save?"*
-
-For the `n` pages starting at `va`: set bit `i` of `*mask` if page `i` has `PTE_D`, clear `PTE_D` on those pages, flush the TLB, and return how many bits are set. A page that is not mapped is clean. Only the range is checked; unmapped pages in it are not an error.
-
-### q2: `int pgprotect(void *va, int n, int writable)` (10 points)
-
-*In the game: the anti-cheat. The gold page is locked; `c` writes to it anyway and the process is killed.*
-
-Make the `n` pages at `va` read-only (`writable == 0`: clear `PTE_W`) or writable again (set `PTE_W`), flush the TLB, return 0. If any page in the range is not mapped, return `-1` and change no page. A later store to a read-only page is a page fault that kills the process (`usertrap()` already does this).
-
-### q3: `checkpoint` / `rollback` (70 points)
-
-*In the game: `s` (save) and `l` (load).*
-
-An incremental snapshot of one region of the process's memory, kept by the kernel. The design is fixed: the copies live in a second page table, `p->shadow`, whose leaf PTEs point at the kernel's copies of the pages. Keep the region in `p->ckpt_va` / `p->ckpt_n`.
-
-`int checkpoint(void *va, int n)`
-
-- The region must be mapped entirely; otherwise `-1`.
-- The first call creates the shadow page table (`uvmcreate()`) and copies every page of the region. Return the number of pages copied (`n`).
-- A later call must give the same region, otherwise `-1`. It copies only the pages that have `PTE_D` set, and returns how many it copied (0 if nothing was written).
-- Every call clears `PTE_D` on the whole region and flushes the TLB.
-- If a page cannot be allocated, return `-1` and leave the process without a snapshot (free what was allocated).
-
-`int rollback(void)`
-
-- `-1` if the process has no snapshot, or a page of the region is no longer mapped (the heap shrank into it).
-- Copies back, from the shadow copies, only the pages that have `PTE_D` set, clears `PTE_D` on them, flushes the TLB, and returns how many it restored. A page that was written and then read by `pgdirty()` is clean, so `rollback` does not touch it: the dirty bit is the only record of a write.
-
-`void ckpt_free(struct proc *p)`
-
-- Frees the copies and the shadow page table, and resets the three fields. Already called from `freeproc()` and `exec()`. A process made by `fork()` starts without a snapshot (its `shadow` is 0; nothing to do).
-
-## Hints
-
-What you need to know, in the order you need it. Everything named here is in `kernel/vm.c` or `kernel/riscv.h` unless said otherwise.
-
-### Page tables (q0)
-
-- Sv39: a virtual address has 39 bits, three 9-bit indexes (`PX(2, va)`, `PX(1, va)`, `PX(0, va)`) and a 12-bit page offset. `walk(pagetable, va, 0)` follows the three levels and returns a pointer to the leaf PTE, or 0 when an intermediate page-table page does not exist. Never dereference that 0.
-- A PTE is `PPN << 10 | flags`. `PTE2PA(pte)` drops the flags and gives the **start of the physical page**. The physical address of `va` is that plus the page offset, `va % PGSIZE` (or `va & (PGSIZE - 1)`). Compare `walkaddr()`, which returns no offset, with `pa0 + (dstva - va0)` in `copyout()`.
-- Flags: `PTE_V` (valid), `PTE_R` / `PTE_W` / `PTE_X`, `PTE_U` (user mode may use the page), `PTE_A`, `PTE_D`. A page the user can access has both `PTE_V` and `PTE_U`. The trampoline, the trapframe and the stack guard page (`uvmclear()` in `exec()`) have PTEs without `PTE_U`; a lazy page that was never touched has no PTE at all.
-- The return type is `uint64`, so `-1` is `(uint64)-1`, all bits set; the user library compares against that.
-
-### Dirty bits and the TLB (q1)
-
-- The CPU sets `PTE_D` in the PTE when a user-mode store hits the page, and `PTE_A` on any access (`kernel/start.c` enables this with `MENVCFG_ADUE`). The hardware never clears them; you do, with `*pte &= ~PTE_D`.
-- The TLB (the CPU's cache of recent translations) may hold a copy of the PTE. After changing a PTE, call `sfence_vma()`, which flushes it, so the next access reads the PTE from memory again. Otherwise the CPU can keep using a cached entry that already has `D` set, never write the bit again, and a later store goes unnoticed.
-- Only user-mode stores reach the user's PTE. `copyout()` writes through the kernel page table (`kvmmake()` maps all of RAM at its own physical address), so a `read()` into the region marks nothing dirty.
-- Bit `i` of a 64-bit mask is `1UL << i`. `1 << i` is an `int` shift: for `i >= 32` it is undefined. Build the mask in your own variable; `sys_pgdirty()` in `kernel/sysproc.c` already copies it out to the user.
-
-### Permissions (q2)
-
-- Clear `PTE_W` and the next user store to that page traps with `scause` 15 (store page fault). `usertrap()` in `kernel/trap.c` calls `vmfault()`, which returns 0 because the page is already mapped, so the process is killed with `setkilled()`. Loads still work. Flush the TLB after changing the bit, or the old permission may stay cached.
-- "Change no page on error" means two loops: the first only checks, the second only writes.
-
-### The snapshot (q3)
-
-- `uvmcreate()` returns an empty top-level page-table page. `walk(p->shadow, va, 1)` allocates the intermediate pages and returns the leaf slot for `va`; it returns 0 only when `kalloc()` failed.
-- A copy is a page from `kalloc()`, filled with `memmove()`, installed as `*spte = PA2PTE(mem) | PTE_V | PTE_R`. A leaf needs `PTE_V` and at least one of `PTE_R` / `PTE_W` / `PTE_X`: `freewalk()` treats an entry with none of them as a page-table page and panics.
-- The kernel can read or write any physical page by its address, because the kernel page table maps all RAM 1:1. So `memmove((void *)PTE2PA(*spte), (void *)PTE2PA(*pte), PGSIZE)` copies a user page into its shadow, and the reverse restores it, whatever the user PTE's `PTE_W` says.
-- "The page has a copy" is `walk(p->shadow, va, 0)` returning a PTE with `PTE_V`. On the first call there are none, so every page is copied; later, copy a page if it has no copy or has `PTE_D`. The region is at most 64 pages, so a loop over `i` is fine.
-- Freeing is two steps: `uvmunmap(p->shadow, va, n, 1)` frees the copies and zeroes their leaf PTEs (it skips pages that have no copy), then `freewalk(p->shadow)` frees the page-table pages (it panics if a leaf is still there). Reset the three fields. When memory runs out halfway, call `ckpt_free()` yourself before returning `-1`: the process must not keep half a snapshot.
-- `fork()`: `uvmcopy()` copies the PTEs with their flags, so a child may start with `PTE_D` already set; harmless, because the first `checkpoint` copies everything anyway. `p->shadow` is not copied, so the child starts without a snapshot. `exec()` and `freeproc()` call `ckpt_free()` for you.
-- `rollback` must check that the region is still mapped: `sbrk(-n)` after a `checkpoint` can unmap part of it.
-
 ## Rules
 
-- Do not change (they are overwritten when grading): `user/` (you may add local tests there; they are overwritten), `mkfs/`, `Makefile`, `kernel/param.h`, `kernel/syscall.h`, and the grading and environment files (`grade`, `test-xv6.py`, `.devcontainer/`, `lab`, `.gitattributes`).
+- Do not change these files; they are overwritten when grading: `user/` (you may add local tests there), `mkfs/`, `Makefile`, `kernel/param.h`, `kernel/syscall.h`, and the grading and environment files (`grade`, `test-xv6.py`, `.devcontainer/`, `lab`, `.gitattributes`).
 - Do not add kernel source files.
 - Everything runs on one CPU; do not change that.
 
@@ -221,8 +255,6 @@ The four problems add up to 100 points, scaled to 3:
 | q2 `pgprotect` | 10 | `./grade` (4 tests) | hidden tests |
 | q3 `checkpoint` / `rollback` | 70 | `./grade` (10 tests) | hidden tests, 10 hidden seeds |
 
-**Submission**
-- The TAs grade the last commit on `main` in your zip. Uncommitted changes are not graded.
 - The TAs use their own copies of `./grade` and the protected files listed under Rules.
 - Build failure: 0 for the whole lab.
 - Kernel panic or hang: 0 for the affected test or seed.
@@ -244,7 +276,7 @@ Covers the Trace Code section, and may also cover your implementation.
 
 ## Submission
 
-1. Commit your work on `main`. Uncommitted changes are not graded.
+1. Commit your work on `main`. The TAs grade the last commit on `main` in your zip; uncommitted changes are not graded.
 2. Zip the whole `os-xv6-lab2-student` folder, including the hidden `.git` folder, as `<student_id>.zip`. Run `make clean` first to keep it small. From the folder that contains `os-xv6-lab2-student`:
 
 ```sh
