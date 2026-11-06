@@ -47,7 +47,7 @@ Do not push your work to a public repo (for example a fork of this one): everyon
 
 ## Deadline
 
-**TBD.** Your zip must be uploaded to eLearn by then.
+**2026/11/23 23:59 (UTC+8).** Your zip must be uploaded to eLearn by then.
 
 ## Plagiarism check
 
