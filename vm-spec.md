@@ -174,9 +174,9 @@ The four problems add up to 100 points, scaled to 3:
 | Problem | Tests | Points | Public (40%) | Private (60%) |
 | ------- | ----- | ------ | ------------ | ------------- |
 | q0 `vatopa` | `pa_*` | 10 | `./grade` (4 tests) | hidden tests |
-| q1 `pgdirty` | `dirty_*` | 10 | `./grade` (4 tests) | hidden tests, 10 hidden `vmtest` seeds |
+| q1 `pgdirty` | `dirty_*` | 10 | `./grade` (4 tests) | hidden tests, 10 hidden seeds |
 | q2 `pgprotect` | `prot_*` | 10 | `./grade` (4 tests) | hidden tests |
-| q3 `checkpoint` / `rollback` | `ckpt_*` | 70 | `./grade` (10 tests) | hidden tests, 10 hidden `vmtest` seeds |
+| q3 `checkpoint` / `rollback` | `ckpt_*` | 70 | `./grade` (10 tests) | hidden tests, 10 hidden seeds |
 
 **Submission**
 - The TAs grade the last commit on `main` in your zip. Uncommitted changes are not graded.
