@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="660" viewBox="0 0 980 660" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+    <style>
+      .box { stroke: #333; stroke-width: 1.2; }
+      .va { fill: #dbeafe; }
+      .pa { fill: #fee2e2; }
+      .ext { fill: #e5e7eb; }
+      .row { fill: #fff; stroke: #333; stroke-width: 1; }
+      .hit { fill: #fde68a; stroke: #333; stroke-width: 1; }
+      .mono { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+      .small { font-size: 11px; fill: #555; }
+      .title { font-weight: bold; }
+      .b { stroke: #2563eb; stroke-width: 2; fill: none; marker-end: url(#blue); }
+      .r { stroke: #dc2626; stroke-width: 2; fill: none; marker-end: url(#red); }
+    </style>
+  </defs>
+  <rect width="980" height="660" fill="#fff"/>
+
+  <!-- virtual address -->
+  <text x="290" y="56" text-anchor="end" class="title">virtual address</text>
+  <text x="290" y="73" text-anchor="end" class="mono">va = 0x5ABC</text>
+  <g text-anchor="middle">
+    <text x="335" y="34" class="small">25</text>
+    <text x="405" y="34" class="small">9</text>
+    <text x="475" y="34" class="small">9</text>
+    <text x="545" y="34" class="small">9</text>
+    <text x="640" y="34" class="small">12</text>
+    <rect x="300" y="40" width="70" height="40" class="box ext"/>
+    <rect x="370" y="40" width="70" height="40" class="box va"/>
+    <rect x="440" y="40" width="70" height="40" class="box va"/>
+    <rect x="510" y="40" width="70" height="40" class="box va"/>
+    <rect x="580" y="40" width="120" height="40" class="box va"/>
+    <text x="335" y="65">EXT</text>
+    <text x="405" y="57">L2</text><text x="405" y="73" class="mono">0</text>
+    <text x="475" y="57">L1</text><text x="475" y="73" class="mono">0</text>
+    <text x="545" y="57">L0</text><text x="545" y="73" class="mono">5</text>
+    <text x="640" y="57">offset</text><text x="640" y="73" class="mono">0xABC</text>
+  </g>
+
+  <!-- legend -->
+  <line x1="20" y1="126" x2="44" y2="126" class="b"/>
+  <text x="52" y="130" class="small">index bits of va pick an entry</text>
+  <line x1="20" y1="148" x2="44" y2="148" class="r"/>
+  <text x="52" y="152" class="small">PPN in a PTE points to a page</text>
+
+  <!-- page tables: rows top to bottom are 511, ..., 5, 4, 3, 2, 1, 0 -->
+  <!-- level 2 (root): x 40-210, top 200 -->
+  <text x="40" y="178" class="title">level-2 table (root)</text>
+  <text x="95" y="194" text-anchor="middle" class="small">PPN</text>
+  <text x="180" y="194" text-anchor="middle" class="small">flags</text>
+  <g>
+    <rect x="40" y="200" width="110" height="26" class="row"/><rect x="150" y="200" width="60" height="26" class="row"/>
+    <rect x="40" y="226" width="110" height="26" class="row"/><rect x="150" y="226" width="60" height="26" class="row"/>
+    <rect x="40" y="252" width="110" height="26" class="row"/><rect x="150" y="252" width="60" height="26" class="row"/>
+    <rect x="40" y="278" width="110" height="26" class="row"/><rect x="150" y="278" width="60" height="26" class="row"/>
+    <rect x="40" y="304" width="110" height="26" class="row"/><rect x="150" y="304" width="60" height="26" class="row"/>
+    <rect x="40" y="330" width="110" height="26" class="row"/><rect x="150" y="330" width="60" height="26" class="row"/>
+    <rect x="40" y="356" width="110" height="26" class="row"/><rect x="150" y="356" width="60" height="26" class="row"/>
+    <rect x="40" y="382" width="110" height="26" class="hit"/><rect x="150" y="382" width="60" height="26" class="hit"/>
+  </g>
+  <g text-anchor="end" class="small">
+    <text x="34" y="217">511</text><text x="34" y="243">⋮</text><text x="34" y="269">5</text><text x="34" y="295">4</text>
+    <text x="34" y="321">3</text><text x="34" y="347">2</text><text x="34" y="373">1</text><text x="34" y="399">0</text>
+  </g>
+  <text x="85" y="399" text-anchor="middle" class="small">→ level-1</text>
+  <text x="180" y="399" text-anchor="middle" class="mono">V</text>
+
+  <!-- level 1: x 290-450, top 250 -->
+  <text x="290" y="228" class="title">level-1 table</text>
+  <text x="340" y="244" text-anchor="middle" class="small">PPN</text>
+  <text x="420" y="244" text-anchor="middle" class="small">flags</text>
+  <g>
+    <rect x="290" y="250" width="100" height="26" class="row"/><rect x="390" y="250" width="60" height="26" class="row"/>
+    <rect x="290" y="276" width="100" height="26" class="row"/><rect x="390" y="276" width="60" height="26" class="row"/>
+    <rect x="290" y="302" width="100" height="26" class="row"/><rect x="390" y="302" width="60" height="26" class="row"/>
+    <rect x="290" y="328" width="100" height="26" class="row"/><rect x="390" y="328" width="60" height="26" class="row"/>
+    <rect x="290" y="354" width="100" height="26" class="row"/><rect x="390" y="354" width="60" height="26" class="row"/>
+    <rect x="290" y="380" width="100" height="26" class="row"/><rect x="390" y="380" width="60" height="26" class="row"/>
+    <rect x="290" y="406" width="100" height="26" class="row"/><rect x="390" y="406" width="60" height="26" class="row"/>
+    <rect x="290" y="432" width="100" height="26" class="hit"/><rect x="390" y="432" width="60" height="26" class="hit"/>
+  </g>
+  <g text-anchor="end" class="small">
+    <text x="284" y="267">511</text><text x="284" y="293">⋮</text><text x="284" y="319">5</text><text x="284" y="345">4</text>
+    <text x="284" y="371">3</text><text x="284" y="397">2</text><text x="284" y="423">1</text><text x="284" y="449">0</text>
+  </g>
+  <text x="330" y="449" text-anchor="middle" class="small">→ level-0</text>
+  <text x="420" y="449" text-anchor="middle" class="mono">V</text>
+
+  <!-- level 0: x 560-730, top 300 -->
+  <text x="560" y="278" class="title">level-0 table</text>
+  <text x="615" y="294" text-anchor="middle" class="small">PPN</text>
+  <text x="700" y="294" text-anchor="middle" class="small">flags</text>
+  <g>
+    <rect x="560" y="300" width="110" height="26" class="row"/><rect x="670" y="300" width="60" height="26" class="row"/>
+    <rect x="560" y="326" width="110" height="26" class="row"/><rect x="670" y="326" width="60" height="26" class="row"/>
+    <rect x="560" y="352" width="110" height="26" class="hit"/><rect x="670" y="352" width="60" height="26" class="hit"/>
+    <rect x="560" y="378" width="110" height="26" class="row"/><rect x="670" y="378" width="60" height="26" class="row"/>
+    <rect x="560" y="404" width="110" height="26" class="row"/><rect x="670" y="404" width="60" height="26" class="row"/>
+    <rect x="560" y="430" width="110" height="26" class="row"/><rect x="670" y="430" width="60" height="26" class="row"/>
+    <rect x="560" y="456" width="110" height="26" class="row"/><rect x="670" y="456" width="60" height="26" class="row"/>
+    <rect x="560" y="482" width="110" height="26" class="row"/><rect x="670" y="482" width="60" height="26" class="row"/>
+  </g>
+  <g text-anchor="end" class="small">
+    <text x="554" y="317">511</text><text x="554" y="343">⋮</text><text x="554" y="369">5</text><text x="554" y="395">4</text>
+    <text x="554" y="421">3</text><text x="554" y="447">2</text><text x="554" y="473">1</text><text x="554" y="499">0</text>
+  </g>
+  <text x="603" y="369" text-anchor="middle" class="mono">0x87F27</text>
+  <text x="700" y="369" text-anchor="middle" class="mono">VRWU</text>
+
+  <!-- blue: index bits select an entry -->
+  <path d="M405,80 V110 H230 V395 H213" class="b"/>
+  <path d="M475,80 V445 H453" class="b"/>
+  <path d="M545,80 V140 H750 V365 H733" class="b"/>
+  <path d="M640,80 V100 H910 V557" class="b"/>
+
+  <!-- red: satp and PPNs point to the next page -->
+  <rect x="20" y="560" width="80" height="30" class="box" fill="#fff"/>
+  <text x="60" y="580" text-anchor="middle" class="mono">satp</text>
+  <path d="M60,560 V411" class="r"/>
+  <circle cx="138" cy="395" r="3" fill="#dc2626"/>
+  <path d="M138,395 V530 H320 V461" class="r"/>
+  <circle cx="378" cy="445" r="3" fill="#dc2626"/>
+  <path d="M378,445 V545 H590 V511" class="r"/>
+  <circle cx="657" cy="365" r="3" fill="#dc2626"/>
+  <path d="M657,365 V525 H830 V557" class="r"/>
+
+  <!-- physical address -->
+  <g text-anchor="middle">
+    <rect x="780" y="560" width="100" height="40" class="box pa"/>
+    <rect x="880" y="560" width="60" height="40" class="box pa"/>
+    <text x="830" y="577">PPN</text><text x="830" y="593" class="mono">0x87F27</text>
+    <text x="910" y="577">offset</text><text x="910" y="593" class="mono">0xABC</text>
+    <text x="830" y="614" class="small">44</text>
+    <text x="910" y="614" class="small">12</text>
+    <text x="860" y="636" class="title">physical address</text>
+    <text x="860" y="652" class="mono">pa = 0x87F27ABC</text>
+  </g>
+
+  <!-- one PTE -->
+  <text x="160" y="598" class="small">one PTE (64 bits; bits 63–54 unused)</text>
+  <g text-anchor="middle">
+    <rect x="160" y="604" width="300" height="28" class="box" fill="#f3f4f6"/>
+    <text x="310" y="623">PPN (bits 53–10)</text>
+    <rect x="460" y="604" width="40" height="28" class="box" fill="#f3f4f6"/>
+    <text x="480" y="623" class="small">RSW</text>
+    <rect x="500" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="512.5" y="623" class="mono">D</text>
+    <rect x="525" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="537.5" y="623" class="mono">A</text>
+    <rect x="550" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="562.5" y="623" class="mono">G</text>
+    <rect x="575" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="587.5" y="623" class="mono">U</text>
+    <rect x="600" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="612.5" y="623" class="mono">X</text>
+    <rect x="625" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="637.5" y="623" class="mono">W</text>
+    <rect x="650" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="662.5" y="623" class="mono">R</text>
+    <rect x="675" y="604" width="25" height="28" class="box" fill="#fef3c7"/><text x="687.5" y="623" class="mono">V</text>
+    <text x="587.5" y="650" class="small">flags = low 10 bits (bit 0 = V)</text>
+  </g>
+</svg>

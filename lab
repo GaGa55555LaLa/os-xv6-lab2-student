@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Run the xv6 lab tools inside the course container.
+#
+#   ./lab shell          interactive shell in the container (default)
+#   ./lab grade [test]   ./grade, the public self-check
+#   ./lab make qemu      any command; exit qemu with Ctrl-a x
+#   ./lab build          (re)build the image
+#
+# Needs Docker (Docker Desktop on macOS/Windows).  On Windows run it from
+# Git Bash or WSL; or use VS Code "Reopen in Container" instead.
+set -euo pipefail
+
+IMAGE=${XV6_IMAGE:-xv6-lab:latest}
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export MSYS_NO_PATHCONV=1   # Git Bash: do not rewrite /w into C:/...
+
+build() { docker build -t "$IMAGE" "$root/.devcontainer"; }
+
+if [ "${1-}" = build ]; then build; exit; fi
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  case "$IMAGE" in */*) docker pull "$IMAGE" ;; *) build ;; esac
+fi
+
+tty=(); [ -t 0 ] && [ -t 1 ] && tty=(-it)
+run=(docker run --rm "${tty[@]}" --init
+     --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
+     -v "$root:/w" -w /w -e HOME=/tmp)
+# Linux: run as the host user so build outputs are not owned by root.
+# Docker Desktop (macOS/Windows) maps ownership itself.
+[ "$(uname -s)" = Linux ] && run+=(-u "$(id -u):$(id -g)")
+
+case "${1-shell}" in
+  shell) "${run[@]}" "$IMAGE" bash ;;
+  grade) shift; "${run[@]}" "$IMAGE" ./grade "$@" ;;
+  *)     "${run[@]}" "$IMAGE" "$@" ;;
+esac

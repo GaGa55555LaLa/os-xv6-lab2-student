@@ -1,0 +1,5 @@
+# Keep LF line endings in the working tree on every OS.  On Windows, git's
+# default core.autocrlf=true turns scripts into CRLF, and then ./grade fails
+# with "env: 'python3\r': No such file or directory" inside the container.
+* text=auto eol=lf
+*.img binary
